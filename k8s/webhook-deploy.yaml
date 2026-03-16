@@ -1,0 +1,146 @@
+# ── Namespace ───────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook
+
+---
+# ── ServiceAccount ──────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook-sa
+  namespace: webhook
+
+---
+# ── ClusterRole — only what we need ─────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete", "patch"]
+
+---
+# ── Bind role to service account ────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webhook-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: webhook-sa
+    namespace: webhook
+roleRef:
+  kind: ClusterRole
+  name: webhook-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ── Secret — HMAC shared secret ─────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-secret
+  namespace: webhook
+type: Opaque
+stringData:
+  WEBHOOK_SECRET: "f0c7a856da9b877921ceeac5f13b57de14e9227287ef69c8c01af55ea6d82c1f"
+
+---
+# ── Deployment ───────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-server
+  namespace: webhook
+  labels:
+    app: webhook-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-server
+  template:
+    metadata:
+      labels:
+        app: webhook-server
+    spec:
+      serviceAccountName: webhook-sa
+
+      # Security context — pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+
+      containers:
+        - name: webhook-server
+          image: webhook-server:latest
+          imagePullPolicy: Never   # use minikube local image
+          ports:
+            - containerPort: 5000
+
+          # Security context — container level
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          # Load HMAC secret from Kubernetes Secret
+          env:
+            - name: WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-secret
+                  key: WEBHOOK_SECRET
+
+          # Liveness and readiness probes
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+
+          # Writable temp dir needed by Python
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+# ── Service ──────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-service
+  namespace: webhook
+spec:
+  selector:
+    app: webhook-server
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
