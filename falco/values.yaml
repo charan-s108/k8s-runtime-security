@@ -83,6 +83,7 @@ customRules:
         and evt.type = connect
         and fd.typechar = 4
         and not fd.rport in (80, 443, 53, 8080, 8443, 6443)
+        and k8s.ns.name = default
       output: >
         WARNING Unexpected outbound connection from container
         (user=%user.name pod=%k8s.pod.name ns=%k8s.ns.name
@@ -129,13 +130,12 @@ falcosidekick:
     debug: false
 
     discord:
-      webhookurl: "DISCORD_WEBHOOK_URL_HERE"
+      webhookurl: "https://discordapp.com/api/webhooks/1483199774600724523/gOYFfO_l4pbF9WUJapK1NyuxYROQtMxWCzaw2b8Q3SPFuwtOB30KL6f3gVu9mQgNQnt9"
       minimumpriority: "warning"
 
     webhook:
       address: "http://webhook-service.webhook.svc.cluster.local:5000"
       minimumpriority: "warning"
-
     prometheus:
       extralabels: ""
 
