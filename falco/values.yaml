@@ -42,6 +42,7 @@ customRules:
         and evt.type in (open, openat)
         and fd.name in (/etc/shadow, /etc/sudoers, /root/.ssh/id_rsa,
                         /root/.ssh/authorized_keys, /proc/self/environ)
+        and k8s.ns.name = default
       output: >
         CRITICAL Sensitive file read in container
         (user=%user.name file=%fd.name pod=%k8s.pod.name

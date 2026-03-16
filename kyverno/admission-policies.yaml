@@ -1,0 +1,80 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: block-privileged-containers
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: block-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [default]
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: block-latest-tag
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: block-latest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [default]
+      validate:
+        message: "Using ':latest' tag is not allowed. Pin to a specific version."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: require-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [production]
+      validate:
+        message: "Containers must run as non-root."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+
+---
+apiVersion: v1
+kind: NetworkPolicy
+metadata:
+  name: quarantine-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      quarantine: "true"
+  policyTypes:
+    - Ingress
+    - Egress
