@@ -35,20 +35,14 @@ customRules:
       priority: WARNING
       tags: [privilege_escalation, container]
 
-    - rule: Sensitive file read
-      desc: Detects reads of credential files inside containers
+    - rule: Read sensitive file untrusted
       condition: >
         container.id != host
-        and evt.type in (open, openat)
         and fd.name in (/etc/shadow, /etc/sudoers, /root/.ssh/id_rsa,
                         /root/.ssh/authorized_keys, /proc/self/environ)
         and k8s.ns.name = default
-      output: >
-        CRITICAL Sensitive file read in container
-        (user=%user.name file=%fd.name pod=%k8s.pod.name
-        ns=%k8s.ns.name cmd=%proc.cmdline)
-      priority: CRITICAL
-      tags: [credential_access, container]
+      override:
+        condition: replace
 
     - rule: Package manager in container
       desc: Detects apt or yum running inside a container
