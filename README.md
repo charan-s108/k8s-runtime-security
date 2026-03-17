@@ -191,7 +191,7 @@ Verify custom rules loaded with no errors:
 FALCO_POD=$(kubectl get pod -n falco -l app.kubernetes.io/name=falco \
   -o jsonpath='{.items[0].metadata.name}')
 
-kubectl logs $FALCO_POD -n falco -c falco | grep -E "Loading|Error" | head -20
+kubectl logs $FALCO_POD -n falco -c falco | grep -A5 "Loading rules"
 # Expected — two lines, zero errors:
 # Loading rules from:
 #    /etc/falco/falco_rules.yaml | schema validation: ok
