@@ -125,7 +125,7 @@ falcosidekick:
     debug: false
 
     discord:
-      webhookurl: "https://discordapp.com/api/webhooks/1483199774600724523/gOYFfO_l4pbF9WUJapK1NyuxYROQtMxWCzaw2b8Q3SPFuwtOB30KL6f3gVu9mQgNQnt9"
+      webhookurl: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
       minimumpriority: "warning"
 
     webhook:
