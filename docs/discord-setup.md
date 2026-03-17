@@ -65,12 +65,6 @@ Becomes:
 
 Save: `Ctrl+O` → `Enter` → `Ctrl+X`
 
-Then upgrade Falco to apply the change:
-
-```bash
-helm upgrade falco falcosecurity/falco -n falco -f falco/values.yaml
-```
-
 ---
 
 ## Step 5 — Test the webhook
