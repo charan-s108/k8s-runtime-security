@@ -298,7 +298,7 @@ kubectl get pods -n monitoring -w
 # Wait for all pods: Running  — then Ctrl+C
 
 # Apply Falco ServiceMonitor
-kubectl apply -f monitoring/falco-servicemonitor.yaml
+kubectl apply -f monitoring/dashboards/falco-servicemonitor.yaml
 
 # Start Grafana
 kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 &
@@ -432,7 +432,7 @@ helm uninstall prometheus -n monitoring
 # Remove Kubernetes resources
 kubectl delete -f k8s/webhook-deploy.yaml
 kubectl delete -f kyverno/admission-policies.yaml
-kubectl delete -f monitoring/falco-servicemonitor.yaml
+kubectl delete -f monitoring/dashboards/falco-servicemonitor.yaml
 
 # Delete namespaces
 kubectl delete namespace falco webhook kyverno monitoring
