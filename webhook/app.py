@@ -1,7 +1,4 @@
-import hashlib
-import hmac
 import logging
-import os
 import time
 from flask import Flask, request, jsonify
 from responder import load_k8s_client, respond
@@ -16,10 +13,6 @@ logger = logging.getLogger(__name__)
 # ── App init ─────────────────────────────────────────────────
 app = Flask(__name__)
 
-# Shared secret between Falcosidekick and this server.
-# Set via environment variable — never hardcoded.
-WEBHOOK_SECRET = ""
-
 # In-memory rate limiter: pod_key → last_action_timestamp
 # Prevents the same pod being acted on more than once per 5 minutes.
 _rate_limit: dict[str, float] = {}
@@ -33,22 +26,6 @@ except Exception as e:
     logger.warning(f"K8s client unavailable (tests/local mode): {e}")
     K8S_AVAILABLE = False
     v1 = None
-
-
-# ── HMAC verification ────────────────────────────────────────
-def verify_signature(payload: bytes, signature: str) -> bool:
-    """
-    Verify Falcosidekick HMAC-SHA256 signature.
-    If no secret is configured, skip verification (dev mode).
-    """
-    if not WEBHOOK_SECRET:
-        return True  # dev mode — no secret set
-    expected = hmac.new(
-        WEBHOOK_SECRET.encode(),
-        payload,
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
 
 
 # ── Rate limiting ────────────────────────────────────────────
@@ -72,19 +49,12 @@ def health():
 # ── Main webhook endpoint ─────────────────────────────────────
 @app.route("/", methods=["POST"])
 def webhook():
-    # 1. Verify HMAC signature if secret is configured
-    if WEBHOOK_SECRET:
-        sig = request.headers.get("X-Signature", "")
-        if not verify_signature(request.data, sig):
-            logger.warning("Invalid HMAC signature — rejecting request")
-            return jsonify({"error": "unauthorized"}), 401
-
-    # 2. Parse JSON payload from Falcosidekick
+    # 1. Parse JSON payload from Falcosidekick
     payload = request.get_json(silent=True)
     if not payload:
         return jsonify({"error": "invalid json"}), 400
 
-    # 3. Extract fields
+    # 2. Extract fields
     rule     = payload.get("rule", "")
     priority = payload.get("priority", "")
     fields   = payload.get("output_fields", {})
@@ -96,12 +66,12 @@ def webhook():
         f"pod={pod_name} ns={namespace}"
     )
 
-    # 4. Ignore alerts with no pod metadata (host-level events)
+    # 3. Ignore alerts with no pod metadata (host-level events)
     if not pod_name or not namespace:
         logger.info("No pod metadata — ignoring host-level alert")
         return jsonify({"status": "ignored", "reason": "no pod metadata"}), 200
 
-    # 5. Only act on our custom security rules
+    # 4. Only act on our custom security rules
     security_keywords = [
         "shell", "sudo", "sensitive", "package manager",
         "binary", "outbound", "root", "netcat", "nmap"
@@ -111,11 +81,11 @@ def webhook():
         logger.info(f"Rule '{rule}' not in security ruleset — ignoring")
         return jsonify({"status": "ignored", "reason": "not a security rule"}), 200
 
-    # 6. Rate limiting — prevent acting on same pod repeatedly
+    # 5. Rate limiting — prevent acting on same pod repeatedly
     if is_rate_limited(pod_name, namespace):
         return jsonify({"status": "rate_limited"}), 200
 
-    # 7. Act
+    # 6. Act
     if K8S_AVAILABLE and v1:
         respond(v1, pod_name, namespace, priority, rule)
         return jsonify({
