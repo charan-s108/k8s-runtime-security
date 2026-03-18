@@ -79,14 +79,6 @@ spec:
             capabilities:
               drop: ["ALL"]
 
-          # Load HMAC secret from Kubernetes Secret
-          env:
-            - name: WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: webhook-secret
-                  key: WEBHOOK_SECRET
-
           # Liveness and readiness probes
           livenessProbe:
             httpGet:
