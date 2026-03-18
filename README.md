@@ -191,7 +191,7 @@ Verify custom rules loaded with no errors:
 FALCO_POD=$(kubectl get pod -n falco -l app.kubernetes.io/name=falco \
   -o jsonpath='{.items[0].metadata.name}')
 
-kubectl logs $FALCO_POD -n falco -c falco | grep -A5 "Loading rules"
+kubectl logs $FALCO_POD -n falco -c falco | grep -E "Loading|Error" | head -20
 # Expected — two lines, zero errors:
 # Loading rules from:
 #    /etc/falco/falco_rules.yaml | schema validation: ok
@@ -298,7 +298,7 @@ kubectl get pods -n monitoring -w
 # Wait for all pods: Running  — then Ctrl+C
 
 # Apply Falco ServiceMonitor
-kubectl apply -f monitoring/dashboards/falco-servicemonitor.yaml
+kubectl apply -f monitoring/falco-servicemonitor.yaml
 
 # Start Grafana
 kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 &
@@ -380,8 +380,89 @@ DELETED pod=attacker ns=default
 **After 60 seconds:**
 ```bash
 kubectl get pod attacker
+# Critical - Error from server (NotFound): pods "attacker" not found ✓
+# Warning - Follow up with the Post-Attack Investigation ✓
+```
+
+---
+ 
+## 🔍 Post-Attack Investigation
+ 
+The webhook uses a **tiered response** based on alert severity. Understanding what happens after an alert fires is important for both operating the system and explaining it in interviews.
+ 
+### Severity Decision Table
+ 
+| Priority | Immediate Action | Auto-Delete? | Next Step |
+|---|---|---|---|
+| CRITICAL | Quarantine pod instantly | Yes — after 60s forensics window | Pod deleted automatically |
+| WARNING | Quarantine pod instantly | No — human review required | Analyst investigates then decides |
+ 
+---
+ 
+### CRITICAL — What happens automatically
+ 
+CRITICAL rules (shell spawn, sensitive file read, netcat, binary write) have near-zero false positive rate. The response is fully automated:
+ 
+```
+1. Alert fires → pod quarantined immediately (network cut via quarantine=true label)
+2. 60-second forensics window begins (pod isolated but still running — logs preserved)
+3. Pod deleted automatically after 60 seconds
+```
+ 
+Webhook log sequence:
+```
+QUARANTINED pod=attacker ns=default — network isolated
+Pod attacker will be deleted in 60 seconds
+Forensics window elapsed — deleting pod=attacker
+DELETED pod=attacker ns=default
+```
+ 
+Confirm the pod is gone:
+```bash
+kubectl get pod attacker
 # Error from server (NotFound): pods "attacker" not found ✓
 ```
+ 
+---
+ 
+### WARNING — Manual investigation workflow
+ 
+WARNING rules (running as root, package manager, outbound connection) can legitimately fire on system processes, so human review happens before any deletion decision. The pod is quarantined immediately — network isolated — but kept running for investigation.
+ 
+**Step 1 — Confirm quarantine label was applied:**
+```bash
+kubectl get pod attacker --show-labels
+# Expected: quarantine=true in the labels column
+```
+ 
+**Step 2 — Investigate what's running inside:**
+```bash
+# Check active processes
+kubectl exec -it attacker -- ps aux
+ 
+# Check command history
+kubectl exec -it attacker -- cat /root/.bash_history
+ 
+# Check network connections
+kubectl exec -it attacker -- cat /proc/net/tcp
+```
+ 
+**Step 3a — If confirmed malicious, delete manually:**
+```bash
+kubectl delete pod attacker --grace-period=0
+```
+ 
+**Step 3b — If false positive, remove quarantine to restore network:**
+```bash
+kubectl label pod attacker quarantine-
+kubectl get pod attacker --show-labels  # quarantine label should be gone
+```
+ 
+---
+ 
+### Why this design?
+ 
+WARNING rules like "running as root" fire on many legitimate system pods, so automated deletion would cause false positive outages. CRITICAL rules like "shell spawned" or "netcat detected" are unambiguous attacker behaviour and justify immediate automated response. The 60-second forensics window on CRITICAL gives enough time to capture logs before the pod is removed.
 
 ---
 
@@ -432,7 +513,7 @@ helm uninstall prometheus -n monitoring
 # Remove Kubernetes resources
 kubectl delete -f k8s/webhook-deploy.yaml
 kubectl delete -f kyverno/admission-policies.yaml
-kubectl delete -f monitoring/dashboards/falco-servicemonitor.yaml
+kubectl delete -f monitoring/falco-servicemonitor.yaml
 
 # Delete namespaces
 kubectl delete namespace falco webhook kyverno monitoring
