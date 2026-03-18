@@ -191,7 +191,7 @@ Verify custom rules loaded with no errors:
 FALCO_POD=$(kubectl get pod -n falco -l app.kubernetes.io/name=falco \
   -o jsonpath='{.items[0].metadata.name}')
 
-kubectl logs $FALCO_POD -n falco -c falco | grep -E "Loading|Error" | head -20
+kubectl logs $FALCO_POD -n falco -c falco | grep -A5 "Loading rules"
 # Expected — two lines, zero errors:
 # Loading rules from:
 #    /etc/falco/falco_rules.yaml | schema validation: ok
@@ -298,7 +298,7 @@ kubectl get pods -n monitoring -w
 # Wait for all pods: Running  — then Ctrl+C
 
 # Apply Falco ServiceMonitor
-kubectl apply -f monitoring/falco-servicemonitor.yaml
+kubectl apply -f monitoring/dashboards/falco-servicemonitor.yaml
 
 # Start Grafana
 kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 &
@@ -513,7 +513,7 @@ helm uninstall prometheus -n monitoring
 # Remove Kubernetes resources
 kubectl delete -f k8s/webhook-deploy.yaml
 kubectl delete -f kyverno/admission-policies.yaml
-kubectl delete -f monitoring/falco-servicemonitor.yaml
+kubectl delete -f monitoring/dashboards/falco-servicemonitor.yaml
 
 # Delete namespaces
 kubectl delete namespace falco webhook kyverno monitoring
