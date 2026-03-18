@@ -39,17 +39,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
-# ── Secret — HMAC shared secret ─────────────────────────────
-apiVersion: v1
-kind: Secret
-metadata:
-  name: webhook-secret
-  namespace: webhook
-type: Opaque
-stringData:
-  WEBHOOK_SECRET: "f0c7a856da9b877921ceeac5f13b57de14e9227287ef69c8c01af55ea6d82c1f"
-
----
 # ── Deployment ───────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
